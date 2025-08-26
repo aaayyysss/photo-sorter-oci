@@ -1,0 +1,8 @@
+flask
+flask-socketio
+eventlet
+insightface==0.7.3
+gdown
+opencv-python-headless
+numpy
+Pillow
