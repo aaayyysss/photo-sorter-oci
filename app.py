@@ -2,6 +2,11 @@ import os
 import shutil
 import json
 import string
+
+import zipfile
+from io import BytesIO
+from flask import send_file
+
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
 from flask_socketio import SocketIO
@@ -411,6 +416,31 @@ def write_revert_scripts(manifest, bat_path, sh_path):
         os.chmod(sh_path, 0o755)
     except Exception:
         pass
+        
+@app.route('/download-results', methods=['GET'])
+def download_results():
+    zip_buffer = BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(UPLOAD_FOLDER):
+            for file in files:
+                full_path = os.path.join(root, file)
+                arcname = os.path.relpath(full_path, UPLOAD_FOLDER)
+                zipf.write(full_path, arcname)
+
+    zip_buffer.seek(0)
+
+    # Optional: delete after download
+    shutil.rmtree(UPLOAD_FOLDER)
+    os.makedirs(REFS_FOLDER, exist_ok=True)
+    os.makedirs(INBOX_FOLDER, exist_ok=True)
+    os.makedirs(SORTED_FOLDER, exist_ok=True)
+    os.makedirs(LOGS_FOLDER, exist_ok=True)
+    os.makedirs(MANIFESTS_FOLDER, exist_ok=True)
+
+    return send_file(zip_buffer, mimetype='application/zip',
+                     as_attachment=True, download_name='results.zip')
+
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=8080, debug=True)
