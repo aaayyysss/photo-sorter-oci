@@ -5,7 +5,7 @@ import string
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
 from flask_socketio import SocketIO
-from photo_sorter import (
+from photo_sorter.core import (
     build_reference_embeddings,
     sort_photos_with_embeddings,
     release_resources,
