@@ -3,6 +3,7 @@ import shutil
 import json
 import string
 
+
 import zipfile
 from io import BytesIO
 from flask import send_file
@@ -24,6 +25,8 @@ INBOX_FOLDER = os.path.join(UPLOAD_FOLDER, "inbox")
 SORTED_FOLDER = os.path.join(UPLOAD_FOLDER, "sorted")
 LOGS_FOLDER = os.path.join(UPLOAD_FOLDER, "logs")
 MANIFESTS_FOLDER = os.path.join(UPLOAD_FOLDER, "manifests")
+UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
+SORT_DONE_FILE = os.path.join(UPLOAD_FOLDER, "SORT_DONE.flag")
 
 for p in (REFS_FOLDER, INBOX_FOLDER, SORTED_FOLDER, LOGS_FOLDER, MANIFESTS_FOLDER):
     os.makedirs(p, exist_ok=True)
@@ -417,30 +420,39 @@ def write_revert_scripts(manifest, bat_path, sh_path):
     except Exception:
         pass
         
+@app.route('/status', methods=['GET'])
+def status():
+    """Check if sorting is done."""
+    return jsonify({"status": "done" if os.path.exists(SORT_DONE_FILE) else "processing"})
+
 @app.route('/download-results', methods=['GET'])
 def download_results():
-    zip_buffer = BytesIO()
+    """Download sorted results as ZIP and clean up server."""
+    if not os.path.exists(SORT_DONE_FILE):
+        return jsonify({"error": "Sorting not finished yet"}), 400
 
+    zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(UPLOAD_FOLDER):
             for file in files:
+                if file == "SORT_DONE.flag":
+                    continue  # skip flag file
                 full_path = os.path.join(root, file)
                 arcname = os.path.relpath(full_path, UPLOAD_FOLDER)
                 zipf.write(full_path, arcname)
 
     zip_buffer.seek(0)
 
-    # Optional: delete after download
+    # Delete results after zipping
     shutil.rmtree(UPLOAD_FOLDER)
-    os.makedirs(REFS_FOLDER, exist_ok=True)
-    os.makedirs(INBOX_FOLDER, exist_ok=True)
-    os.makedirs(SORTED_FOLDER, exist_ok=True)
-    os.makedirs(LOGS_FOLDER, exist_ok=True)
-    os.makedirs(MANIFESTS_FOLDER, exist_ok=True)
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-    return send_file(zip_buffer, mimetype='application/zip',
-                     as_attachment=True, download_name='results.zip')
-
+    return send_file(
+        zip_buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="results.zip"
+    )
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=8080, debug=True)
